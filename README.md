@@ -3,8 +3,10 @@ huawei-u8836d-kernel-3.4.5
 
 For build:
 
-cd /{PATH}/beta22 
+cd /{PATH}/beta22
+
 CROSS_COMPILE=/<path>/4.6.3/bin/arm-linux-androideabi- TARGET_PRODUCT=huaqin77_cu_jb2 ./build.sh release
+
 
 To compress the modules:
 
