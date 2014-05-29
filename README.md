@@ -7,9 +7,7 @@ cd /{PATH}/kernel
 
 CROSS_COMPILE=/{PATH}/4.6.3/bin/arm-linux-androideabi- TARGET_PRODUCT=huaqin77_cu_jb2 ./build.sh release
 
-After a few minutes kernel and modules in the folder build_result
+After a few minutes kernel and modules in the folder build_result, boot.zip in in the folder release
 
 
-To compress the modules:
 
-cd build_result/system/lib/modules && find . -type f -name '*.ko' | xargs -n 1 /{PATH}/4.6.3/bin/arm-linux-androideabi-strip --strip-unneeded && cd ../../../..

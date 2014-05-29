@@ -201,4 +201,14 @@ fi
 for file in $(find ../ -name *.ko); do
  cp $file ../build_result/system/lib/modules/
 done
+find ../build_result -type f -name '*.ko' | xargs -n 1 ../4.6.3/bin/arm-linux-androideabi-strip --strip-unneeded
+
+../boot/repack-MT65xx.pl -boot ../build_result/kernel_.bin ../boot/boot.img-ramdisk ../build_result/boot.img
+
+let "v=`cat ../boot/v`+1"
+echo $v > ../boot/v
+
+cp ../boot/boot.zip ../release/boot_3.4.5_$v.zip
+
+zip -r ../release/boot_3.4.5_$v.zip ../build_result/system ../build_result/boot.img
 
