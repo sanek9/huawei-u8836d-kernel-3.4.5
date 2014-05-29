@@ -6,7 +6,7 @@
 #include <linux/xlog.h>
 //#include "partition_define.h"
 #include "../../../../../kernel/drivers/staging/android/logger.h"
-//#include "../../../../../../drivers/staging/android/logger.h"
+
 #define AEE_IPANIC_PLABEL "expdb"
 
 #define IPANIC_MODULE_TAG "KERNEL-PANIC"
