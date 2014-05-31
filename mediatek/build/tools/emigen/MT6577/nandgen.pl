@@ -1,309 +1,167 @@
 #!/usr/local/bin/perl -w
 
-#****************************************************************************
-# Included Modules
-#****************************************************************************
 use File::Basename;
-
-my $os = &OsName();
-
+#use strict;
 my $LOCAL_PATH;
-
 BEGIN
 {
-  $LOCAL_PATH = dirname($0);
+    $LOCAL_PATH = dirname($0);
 }
 
-if ($os eq "linux")
-{
-   print "Os = linux\n";
+use lib "$LOCAL_PATH/../../Spreadsheet";
+use lib "$LOCAL_PATH/../../";
+require 'ParseExcel.pm';
 
-   use lib "$LOCAL_PATH/../../Spreadsheet";
-   use lib "$LOCAL_PATH/../../";
-   require 'ParseExcel.pm';
-   $start_num = 0; 
-}
-else
-{
-  die "Only linux is support now!\n";
-}
-
-my $DebugPrint    = 1; # 1 for debug; 0 for non-debug
 #****************************************************************************
-# Now for nand device list gen
+# Customization Field
 #****************************************************************************
-
-my $VENDOR_FIELD ;
-my $NAME_FIELD ;
-my $PROJECT_FIELD ;
-my $ID_FIELD ;
-my $EXTID_FIELD ;
-my $ID_FIELD1 ;
-my $ID_FIELD2 ;
-my $ID_FIELD3 ;
-my $ID_FIELD4 ;
-my $ID_FIELD5 ;
-my $ADDRCYCLE_FIELD ;
-my $IOWIDTH_FIELD ;
-my $TOTALSIZE_FIELD ;
-my $BLOCKSIZE_FIELD ;
-my $PAGESIZE_FIELD ;
-my $TIMING_FIELD ;
-my $CACHEREAD_FIELD ;
-my $RANDOMREAD_FIELD ;
-my $SPARESIZE_FIELD ;
-# define for columns
-my $COLUMN_VENDOR                   = 0 ;
-my $COLUMN_NAME                     = $COLUMN_VENDOR + 1 ;
-my $COLUMN_PROJECT                  = $COLUMN_NAME + 1 ;
-my $COLUMN_ID1                      = $COLUMN_PROJECT + 1 ;
-my $COLUMN_ID2                      = $COLUMN_ID1 + 1 ;
-my $COLUMN_ID3                      = $COLUMN_ID2 + 1 ;
-my $COLUMN_ID4                      = $COLUMN_ID3 + 1 ;
-my $COLUMN_ID5                      = $COLUMN_ID4 + 1 ;
-my $COLUMN_ADDRCYCLE                = $COLUMN_ID5 + 1 ;
-my $COLUMN_IOWIDTH                  = $COLUMN_ADDRCYCLE + 1 ;
-my $COLUMN_TOTALSIZE                = $COLUMN_IOWIDTH + 1 ;
-my $COLUMN_BLOCKSIZE                = $COLUMN_TOTALSIZE + 1 ;
-my $COLUMN_PAGESIZE                 = $COLUMN_BLOCKSIZE + 1 ;
-my $COLUMN_TIMING                   = $COLUMN_PAGESIZE + 1 ;
-my $COLUMN_CACHEREAD                = $COLUMN_TIMING + 1 ;
-my $COLUMN_RANDOMREAD               = $COLUMN_CACHEREAD + 1 ;
-my $COLUMN_SPARESIZE                = $COLUMN_RANDOMREAD + 1;
-
-my $NAND_LIST_DEFINE_H_NAME         = $ARGV[0] ;
-my $MEMORY_DEVICE_LIST_XLS          = $ARGV[1];
-my $PLATFORM                        = $ARGV[2]; # MTxxxx
-my $PROJECT                         = $ARGV[3];
-my $PAGE_SIZE                       = $ARGV[4] ;
+my $DebugPrint = "yes";
+my $VersionAndChanglist = "2.0 support autodetect NAND ID and improvement\n";
+my $PLATFORM = $ENV{MTK_PLATFORM};# MTxxxx
+my $PROJECT = $ENV{PROJECT};
 my $FULL_PROJECT = $ENV{FULL_PROJECT};
+my $PAGE_SIZE = $ENV{MTK_NAND_PAGE_SIZE};
+my @MemoryDeviceList;
+print "\$PLATFORM=$PLATFORM,\$PROJECT=$PROJECT,\$FULL_PROJECT=$FULL_PROJECT,\$PAGE_SIZE=$PAGE_SIZE\n";
+#****************************************************************************
+# Main Thread Field
+#****************************************************************************
+    &ReadNANDExcelFile();
+    &GenNANDHeaderFile();
+    print "nandgen done\n";
+    exit 0;
 
-my $STORAGE_TYPE                    = "NAND" ;
-my $start_row = 3;
-my $CUSTOM_OUT_COMMON = "mediatek/custom/out/$FULL_PROJECT/common";
-my $CUSTOM_COMMON = "mediatek/custom/$PROJECT/common";
-print "header: $NAND_LIST_DEFINE_H_NAME, excel: $MEMORY_DEVICE_LIST_XLS, PLATFORM: $PLATFORM, PROJECT: $PROJECT, page size: $PAGE_SIZE\n" ;
 
-$parser = Spreadsheet::ParseExcel->new() ;
-$Book = $parser->Parse($MEMORY_DEVICE_LIST_XLS) ; 
-
-&ReadNANDExcelFile () ;
-
-&GenNANDHeaderFile () ;
-
-print "nandgen done\n" ;
-exit ;
-
-sub GenNANDHeaderFile ()
-{
-    my $iter = 0 ;
-    my $i ;
-    my $temp ;
-    my $advance_option ;
-    my $nand_count = 0;
-	unless(-e $CUSTOM_COMMON){
-		{`mkdir -p $CUSTOM_COMMON`;}	
-	}
-    open (NAND_LIST_DEFINE_H_NAME, ">$NAND_LIST_DEFINE_H_NAME") or &error_handler("$NAND_LIST_DEFINE_H_NAME: file error!", __FILE__, __LINE__);
-    print NAND_LIST_DEFINE_H_NAME &copyright_file_header();
-    
-    print NAND_LIST_DEFINE_H_NAME "\n#ifndef __NAND_DEVICE_LIST_H__\n#define __NAND_DEVICE_LIST_H__\n\n" ;
-        
-	print NAND_LIST_DEFINE_H_NAME "static const flashdev_info gen_FlashTable[]={\n" ;
-   
-    $PROJECT = uc($PROJECT);
-	
-    for ($iter=0; $iter<$total_rows; $iter++)
-    {
-        $advance_option = 0;
-        # if ($PROJECT_FIELD[$iter] eq $PROJECT)
-        {
-            print "$PAGE_SIZE $PAGESIZE_FIELD[$iter]\n" ;
-            if (($PAGE_SIZE eq "4K" && $PAGESIZE_FIELD[$iter] eq 4096) || ($PAGE_SIZE eq "2K" && $PAGESIZE_FIELD[$iter] eq 2048))
-            {
-                for ($i=0; $i<$iter; $i++)
-                {
-                    if ( ($ID_FIELD[$iter] eq $ID_FIELD[$i]) && ($EXTID_FIELD[$iter] eq $EXTID_FIELD[$i]) )
-                    {
-                        print "Device $ID_FIELD[$iter] $EXTID_FIELD[$iter] already exists\n" ;
-                        last;
-                    }
-                }
-
-                print "i=$i iter=$iter\n" ;
-
-                if ($i eq $iter)
-                {
-                    print NAND_LIST_DEFINE_H_NAME "\t{$ID_FIELD[$iter], $EXTID_FIELD[$iter], $ADDRCYCLE_FIELD[$iter], $IOWIDTH_FIELD[$iter], $TOTALSIZE_FIELD[$iter], $BLOCKSIZE_FIELD[$iter], $PAGESIZE_FIELD[$iter],  $SPARESIZE_FIELD[$iter],$TIMING_FIELD[$iter], " ; 
-                    print "\t{$ID_FIELD[$iter], $EXTID_FIELD[$iter], $ADDRCYCLE_FIELD[$iter], $IOWIDTH_FIELD[$iter], $TOTALSIZE_FIELD[$iter], $BLOCKSIZE_FIELD[$iter], $PAGESIZE_FIELD[$iter],  $SPARESIZE_FIELD[$iter], $TIMING_FIELD[$iter], " ; 
-                    printf NAND_LIST_DEFINE_H_NAME "\"%.13s\", ",$NAME_FIELD[$iter] ;
-                    if ($CACHEREAD_FIELD[$iter] eq "YES")
-                    {
-                        $advance_option += 2 ;
-                    }
-                    if ($RANDOMREAD_FIELD[$iter] eq "YES")
-                    {
-                        $advance_option += 1 ;
-                    }
-                    print NAND_LIST_DEFINE_H_NAME "$advance_option},\n" ;
-    
-                    $nand_count += 1;
-                }
-            }
-            else
-            {
-                print "page size not match\n" ;
-            }
-        }
-    }
-
-    if ($nand_count eq 0)
-    {
-        print "Platform: $PLATFORM, project: $PROJECT, page size: $PAGE_SIZE\n" ;
-        my $message = "ERROR: no nand device is generated into device list, please refer: $NAND_LIST_XLS and error log\n";
-        # print $message ;
-        # die $message ;
-    }
-    
-    print NAND_LIST_DEFINE_H_NAME "\t{0x0000, 0x000000, 0, 0, 0, 0, 0, 0, 0,\"xxxxxxxxxx\", 0},\n" ;
-    print NAND_LIST_DEFINE_H_NAME "};\n" ;
-    
-    print NAND_LIST_DEFINE_H_NAME "\n\n" ;
-    print NAND_LIST_DEFINE_H_NAME "#endif\n" ;
-    
-    close NAND_LIST_DEFINE_H_NAME ;
-	unless(-e $CUSTOM_OUT_COMMON){
-		{`mkdir -p $CUSTOM_OUT_COMMON`;}	
-	}
-	{`cp $NAND_LIST_DEFINE_H_NAME $CUSTOM_OUT_COMMON`;}
-}
-
+#****************************************************************************
+# Subfunction Field
+#****************************************************************************
 sub ReadNANDExcelFile
+{	my @all_column=[];#=qw(Vendor Part_Number Nand_ID AddrCycle IOWidth TotalSize_MB BlockSize_KB PageSize_B SpareSize_B Timing  CacheRead RandomRead);
+    my $MEMORY_DEVICE_LIST_XLS = "mediatek/build/tools/emigen/${PLATFORM}/MemoryDeviceList_${PLATFORM}.xls";
+    my $SheetName = "NAND";
+    my $parser = Spreadsheet::ParseExcel->new();
+    my $Book = $parser->Parse($MEMORY_DEVICE_LIST_XLS);
+    my $sheet = $Book->Worksheet($SheetName);
+    my %COLUMN_LIST;
+    my $tmp;
+    my $row;
+    my $col;
+    for($col = 0, $row = 0,$tmp = &xls_cell_value($sheet, $row, $col); $tmp; $col++, $tmp = &xls_cell_value($sheet, $row, $col))
+    {
+        $COLUMN_LIST{$tmp} = $col;
+	}
+	@all_column=sort (keys(%COLUMN_LIST));
+	print "@all_column\n";
+	
+	for($row = 1,$tmp = &xls_cell_value($sheet, $row, $COLUMN_LIST{Part_Number});$tmp;$row++,$tmp = &xls_cell_value($sheet, $row, $COLUMN_LIST{Part_Number}))
+	{
+		foreach $i (@all_column){
+			$MemoryDeviceList[$row-1]{$i}=&xls_cell_value($sheet, $row, $COLUMN_LIST{$i});
+		}
+	}
+
+	if($DebugPrint eq "yes"){
+		print "~~~~~~~~~EXCEL INFO~~~~~~~~~~~\n";
+		for($index=0;$index<@MemoryDeviceList;$index++){
+			print "index:$index\n";
+			foreach $i (@all_column){
+				printf ("%-15s:%-20s ",$i,$MemoryDeviceList[$index]->{$i});
+			}
+			print "\n";
+		}
+		print "~~~~~~~~~There are $index Nand Chips~~~~~~~~~~~\n";
+	}
+}
+
+sub GenNANDHeaderFile()
 {
-    my $sheet;
-    my $read       = 1; # if this flag counts to '0', it means End Of Sheet
-    
-    my $row = 1;
-    my $read_row = $start_row;
 
-    $sheet = get_sheet($STORAGE_TYPE) ;
-    
-    if ($sheet eq undef)
+    my $NAND_LIST_DEFINE_H_NAME = "mediatek/custom/$PROJECT/common/nand_device_list.h";
+    my $CUSTOM_OUT_COMMON = "mediatek/custom/out/$FULL_PROJECT/common";
+    my $CUSTOM_COMMON = "mediatek/custom/$PROJECT/common";
+	my %InFileChip;
+	my $Longest_ID=0;
+	my $Chip_count=0;
+    if(!-e $CUSTOM_COMMON)
     {
-        print "get_sheet failed? $STORAGE_TYPE\n" ;
+	    `mkdir -p $CUSTOM_COMMON `;
     }
+	if(-e $NAND_LIST_DEFINE_H_NAME)
+	{
+		`chmod 777 $NAND_LIST_DEFINE_H_NAME`;
+	}
 
-    print "begin read\n" ;
-    
-    while ($read)
+	for($iter=0;$iter<@MemoryDeviceList;$iter++){
+		if(($PAGE_SIZE eq "4K" && $MemoryDeviceList[$iter]->{PageSize_B} eq 4096) || ($PAGE_SIZE eq "2K" && $MemoryDeviceList[$iter]->{PageSize_B} eq 2048))
+		{
+			my $ID_length=0;
+			my $advance_option=0;
+			my $ID=$MemoryDeviceList[$iter]->{Nand_ID};
+			if(!exists($InFileChip{$ID})){
+				if(length($ID)%2){
+					print "The chip:$ID have wrong number!\n";
+				}else{	
+					$ID_length=length($ID)/2-1;
+					if($ID_length > $Longest_ID){
+						$Longest_ID = $ID_length;
+					}
+					#print "\$Longest_ID=$Longest_ID\n";
+					if ($MemoryDeviceList[$iter]->{CacheRead} eq "YES")
+					{
+						$advance_option += 2;
+					}
+					if ($MemoryDeviceList[$iter]->{RandomRead} eq "YES")
+					{
+						$advance_option += 1;
+					}
+					$InFileChip{$ID}={'Index'=>$iter,'IDLength'=>$ID_length,'ADV_OPT'=>$advance_option};
+					$Chip_count++;
+				}
+			}else{
+				print "There more than 1 chip have the ID:$MemoryDeviceList[$iter]->{Nand_ID},you should modify the excel\n";
+			}
+		}
+		
+	}
+    open(FD, ">$NAND_LIST_DEFINE_H_NAME") or &error_handler("open $NAND_LIST_DEFINE_H_NAME fail\n", __FILE__, __LINE__);
+    print FD "\n#ifndef __NAND_DEVICE_LIST_H__\n#define __NAND_DEVICE_LIST_H__\n\n";
+	print FD "#define NAND_MAX_ID\t\t$Longest_ID\n";
+	print FD "#define CHIP_CNT\t\t$Chip_count\n";
+	print FD &struct_flashdev_info_define();
+	print FD "static const flashdev_info gen_FlashTable[]={\n";
+	foreach $ID (sort by_length (keys(%InFileChip))){
+		my $it=$InFileChip{$ID}->{Index};
+		#creat ID arry string
+		my @ID_arry=($ID =~ m/([\dA-Fa-f]{2})/gs);
+		my $arry_str="{";
+		for($i=0;$i<$Longest_ID;$i++){
+			if($i<@ID_arry){
+				$arry_str.="0x$ID_arry[$i]";
+			}else{
+				$arry_str.="0x00";
+			}
+			if($i<$Longest_ID-1){
+				$arry_str.=",";
+			}
+		}
+		$arry_str.="}";
+		print "ID=$arry_str\n";
+		#print string to file
+		print FD "\t{$arry_str, $InFileChip{$ID}->{IDLength},$MemoryDeviceList[$it]->{AddrCycle}, $MemoryDeviceList[$it]->{IOWidth},$MemoryDeviceList[$it]->{TotalSize_MB},$MemoryDeviceList[$it]->{BlockSize_KB},$MemoryDeviceList[$it]->{PageSize_B},$MemoryDeviceList[$it]->{SpareSize_B},$MemoryDeviceList[$it]->{Timing},";
+		printf FD ("\"%.13s\",%d}, \n",$MemoryDeviceList[$it]->{Part_Number},$InFileChip{$ID}->{ADV_OPT});
+	}
+
+    print FD "};\n\n";
+	print FD "#endif\n";
+    close FD;
+
+    if(!-e $CUSTOM_OUT_COMMON)
     {
-        $VENDOR_FIELD[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_VENDOR) ;
-        if ($VENDOR_FIELD[$row-1] eq $undefined)
-        {
-            print "meet END.\n";
-            $read = 0 ;
-        }
-       
-        if ($read)
-        {  
-            $NAME_FIELD[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_NAME) ;
-            $PROJECT_FIELD[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_PROJECT) ;
-            $PROJECT_FIELD[$row-1] = uc($PROJECT_FIELD[$row-1]) ;
-            $ID_FIELD1[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_ID1) ;
-            $ID_FIELD2[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_ID2) ;
-            $ID_FIELD3[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_ID3) ;
-            $ID_FIELD4[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_ID4) ;
-            $ID_FIELD5[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_ID5) ;
-            $ID_FIELD[$row-1] = sprintf("0x%2s%2s", substr($ID_FIELD1[$row-1], 2, 2), substr($ID_FIELD2[$row-1], 2, 2));
-            $EXTID_FIELD[$row-1] = sprintf("0x%2s%2s%2s", substr($ID_FIELD3[$row-1], 2, 2), 
-                substr($ID_FIELD4[$row-1], 2, 2), substr($ID_FIELD5[$row-1], 2, 2));
-            $ADDRCYCLE_FIELD[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_ADDRCYCLE) ;
-            $IOWIDTH_FIELD[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_IOWIDTH) ;
-            $TOTALSIZE_FIELD[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_TOTALSIZE) ;
-            $BLOCKSIZE_FIELD[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_BLOCKSIZE) ;
-            $PAGESIZE_FIELD[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_PAGESIZE) ;
-            $TIMING_FIELD[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_TIMING) ;
-            $CACHEREAD_FIELD[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_CACHEREAD) ;
-            $RANDOMREAD_FIELD[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_RANDOMREAD) ;
- 	    $SPARESIZE_FIELD[$row-1] = &xls_cell_value($sheet, $read_row, $COLUMN_SPARESIZE) ;
-	        # debug
-            print "$NAME_FIELD[$row-1], $PROJECT_FIELD[$row-1] $ID_FIELD1[$row-1] $ID_FIELD2[$row-1] $ID_FIELD[$row-1]\n" ;
-            # debug
-            $row ++ ;
-            $read_row++;
-        }
+	    `mkdir -p $CUSTOM_OUT_COMMON `;
+		`rm $CUSTOM_OUT_COMMON/nand_device_list.h`;
+        `cp $NAND_LIST_DEFINE_H_NAME $CUSTOM_OUT_COMMON `;
     }
-    
-    if ($row eq $start_row)
-    {
-        die "error in excel file no data!\n" ;
-    }
-    
-    $total_rows = $row - 1;
-    
-    print "$total_rows read.\n" ;
 }
-
-#****************************************************************************
-# subroutine:  copyright_file_header
-# return:      file header -- copyright
-#****************************************************************************
-sub copyright_file_header
-{
-    my $template = <<"__TEMPLATE";
-__TEMPLATE
-
-   return $template;
-}
-
-#****************************************************************************************
-# subroutine:  OsName
-# return:      which os this script is running
-# input:       no input
-#****************************************************************************************
-sub OsName {
-  my $os = `set os`;
-  if(!defined $os) { 
-    $os = "linux";
-  } 
-  else {
-    die "does not support windows now!!" ;
-    $os = "windows";
-  }
-}
-#*************************************************************************************************
-# subroutine:  gen_pm
-# return:      no return, but will generate a ForWindows.pm in "/perl/lib" where your perl install
-#*************************************************************************************************
-sub gen_pm {
-  foreach (@INC) {
-    if(/^.*:\/Perl\/lib$/) {
-      open FILE, ">${_}\/ForWindows.pm";
-      print FILE "package ForWindows;\n";
-      print FILE "use Win32::OLE qw(in with);\n";
-      print FILE "use Win32::OLE::Const 'Microsoft Excel';\n";
-      print FILE "\$Win32::OLE::Warn = 3;\n";
-      print FILE "1;";
-      close(FILE);
-      last;
-    }
-  }
-}
-#****************************************************************************************
-# subroutine:  get_sheet
-# return:      Excel worksheet no matter it's in merge area or not, and in windows or not
-# input:       Specified Excel Sheetname
-#****************************************************************************************
-sub get_sheet {
-  my $MEMORY_DEVICE_TYPE = $_[0];
-  if ($os eq "windows") {
-    return $Sheet     = $Book->Worksheets($MEMORY_DEVICE_TYPE);
-  }
-  else {
-    return $Sheet     = $Book->Worksheet($MEMORY_DEVICE_TYPE);
-  }
-}
-
 
 #****************************************************************************************
 # subroutine:  xls_cell_value
@@ -312,47 +170,69 @@ sub get_sheet {
 # input:       $row:    Specified row number
 # input:       $col:    Specified column number
 #****************************************************************************************
-sub xls_cell_value {
-  my ($Sheet, $row, $col) = @_;
-  if ($os eq "windows") {
-    return &win_xls_cell_value($Sheet, $row, $col);
-  }
-  else {
-      return &lin_xls_cell_value($Sheet, $row, $col);
-  }
-}
-sub win_xls_cell_value
+sub xls_cell_value()
 {
-    my ($Sheet, $row, $col) = @_;
-
-    if ($Sheet->Cells($row, $col)->{'MergeCells'})
+    my($Sheet, $row, $col) = @_;
+    my $cell = $Sheet->get_cell($row, $col);
+    if (defined $cell)
     {
-        my $ma = $Sheet->Cells($row, $col)->{'MergeArea'};
-        return ($ma->Cells(1, 1)->{'Value'});
-    }
-    else
+        return $cell->Value();
+    } else
     {
-        return ($Sheet->Cells($row, $col)->{'Value'})
+        print "$Sheet: row=$row, col=$col undefined\n";
+        return;
     }
-}
-sub lin_xls_cell_value
-{
-  my ($Sheet, $row, $col) = @_;
-  my $cell = $Sheet->get_cell($row, $col);
-  exit 1 unless (defined $cell);
-  my $value = $cell->Value();
-
 }
 
 #****************************************************************************
 # subroutine:  error_handler
 # input:       $error_msg:     error message
 #****************************************************************************
-sub error_handler
+sub error_handler()
 {
-	   my ($error_msg, $file, $line_no) = @_;
-	   
-	   my $final_error_msg = "scatgen ERROR: $error_msg at $file line $line_no\n";
-	   print $final_error_msg;
-	   die $final_error_msg;
+    my($error_msg, $file, $line_no) = @_;
+    my $final_error_msg = "NandGen ERROR: $error_msg at $file line $line_no\n";
+    print $final_error_msg;
+    die $final_error_msg;
+}
+#*******************************************************************************
+#by_number: sort algorithm
+#*******************************************************************************
+sub by_length
+{
+	if(length($a)>length($b))
+	{-1}
+	elsif(length($a)<length($b))
+	{1}
+	elsif(length($a)==length($b))
+	{$a<=>$b;}
+}
+
+sub by_number
+{$a<=>$b}
+
+sub struct_flashdev_info_define()
+{
+    my $template = <<"__TEMPLATE";
+#define RAMDOM_READ\t\t(1<<0)
+#define CACHE_READ\t\t(1<<1)
+
+typedef struct
+{
+   u8 id[NAND_MAX_ID];
+   u8 id_length;
+   u8 addr_cycle;
+   u8 iowidth;
+   u16 totalsize;
+   u16 blocksize;
+   u16 pagesize;
+   u16 sparesize;
+   u32 timmingsetting;
+   u8 devciename[14];
+   u32 advancedmode;
+}flashdev_info,*pflashdev_info;
+
+__TEMPLATE
+
+   return $template;
 }

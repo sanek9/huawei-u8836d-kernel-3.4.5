@@ -134,13 +134,13 @@ define protect-err
 $(error $(1): Please do not use this protect source $(2))
 endef
 
-Check_Item := $(LOCAL_SRC_FILES) $(LOCAL_C_INCLUDE)
+Check_Item := $(LOCAL_SRC_FILES) $(LOCAL_C_INCLUDES)
 Check_Path := mediatek/protect/ \
               mediatek/protect-bsp/ \
               mediatek/protect-app/
 PROTECT_FILES :=
 $(foreach path,$(Check_Path), \
-   $(if $(filter $(path)/%,$(LOCAL_PATH)),, \
+   $(if $(filter $(path)%,$(LOCAL_PATH)),, \
       $(foreach item,$(Check_Item),\
          $(if $(findstring $(path),$(item)),\
              $(eval PROTECT_FILES += $(item)) \
@@ -148,10 +148,11 @@ $(foreach path,$(Check_Path), \
       ) \
    ) \
 )
+
 # Add exception case for gemini for workaround
 ERROR_FILES :=
 $(foreach item,$(PROTECT_FILES),  \
-  $(if $(filter ../../mediatek/protect/frameworks/base/telephony/java/com/android/internal/telephony/gemini/%,$(PRODUCT_FILES)),  \
+  $(if $(filter ../../mediatek/protect/frameworks/base/telephony/java/com/android/internal/telephony/gemini/%,$(item)),,  \
     $(eval ERROR_FILES += $(item))  \
   ) \
 )

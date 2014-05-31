@@ -10,8 +10,6 @@ print "Can NOT find $logDir\n";
 exit 0;
 } 
 
-#  "bootable/bootloader/uboot/uboot_${prj}.bin",
-#  "bootable/bootloader/uboot/logo.bin",
 my @lnmatrix = ();
 if ($ENV{'KBUILD_OUTPUT_SUPPORT'} eq "yes")
 {

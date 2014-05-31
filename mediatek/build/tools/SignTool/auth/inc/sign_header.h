@@ -16,18 +16,6 @@
 #define VERIFY_OFFSET                "VERIFY_OFFSET"
 #define VERIFY_LENGTH                "VERIFY_LENGTH"
 
-
-typedef struct _SEC_FB_HEADER
-{
-    unsigned int magic_num;
-    unsigned int hdr_ver;
-    unsigned int hash_count;
-    unsigned int chunk_size;
-    unsigned char part_name[32];
-    unsigned int orig_img_size;
-    unsigned char reserved[12];
-} SEC_FB_HEADER;
-
  
 typedef struct _SEC_IMG_HEADER
 {

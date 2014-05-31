@@ -33,6 +33,7 @@ print "********************************************\n";
 print " Create Folder \n";
 print "********************************************\n";
 `mkdir $dir/signed_bin` if ( ! -d "$dir/signed_bin" );
+`mkdir $dir/signed_bin/fb_sig` if ( ! -d "$dir/signed_bin/fb_sig" );
 print "Image Dir '$dir'\n";
 my $command = "mediatek/build/tools/SignTool/SignTool.sh";
 

@@ -34,7 +34,7 @@ elif [ "$5" == "4K" ] ; then
 elif [ "$5" == "1K" ] ; then
     NAND_PAGE_SIZE=1024
 else
-    echo "[Error] NAND page size $5 not supported, set to default 2048!!"
+    echo "[SignTool] NAND page size $5 not supported, set to default 2048!!"
     NAND_PAGE_SIZE=2048
 fi
 
@@ -50,13 +50,12 @@ if [ "$Sparse_Str" == "ff3a ed26" ] ; then
         echo "SIGN PASS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!(Sparse S1 IMG)"
         cp -f HEADER EXT_HDR_SPARSE
         cat SIGNATURE >> EXT_HDR_SPARSE
+        rm -f SIGNATURE
+        rm -f HEADER
     else
         echo "SIGN FAIL !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!(Sparse S1 IMG)"
         exit 1;
     fi
-
-    rm -f SIGNATURE
-    rm -f HEADER
 
     ./${SignTool} $1 $2 $3 SIGNATURE HEADER EXT_HDR_SPARSE
     if [ $? -eq 0 ] ; then
@@ -83,13 +82,12 @@ elif [ "$Yaffs_Str" == "0003 0000 0001 0000 ffff 0000 0000 0000" ] ; then
         echo "SIGN PASS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!(Yaffs S1 IMG)"
         cp -f HEADER EXT_HDR_SPARSE
         cat SIGNATURE >> EXT_HDR_SPARSE
+        rm -f SIGNATURE
+        rm -f HEADER
     else
         echo "SIGN FAIL !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!(Yaffs S1 IMG)"
         exit 1;
     fi
-
-    rm -f SIGNATURE
-    rm -f HEADER
 
     ./${SignTool} $1 $2 $3 SIGNATURE HEADER EXT_HDR_SPARSE
     if [ $? -eq 0 ] ; then
@@ -115,30 +113,23 @@ else
         cp -f HEADER $4
         cat $3 >> $4
         cat SIGNATURE >> $4
+        rm -f SIGNATURE
+        rm -f HEADER
     else
         echo "SIGN FAIL !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!(Normal IMG)"
         exit 1;
     fi
-
-    rm -f SIGNATURE
-    rm -f HEADER
 fi
 
 
 ##############################################################
 # Check if need to generate fastboot signature
 if [ "$6" == "FB_SIG" ] ; then
-    ./${SignTool} $1 $2 $4 $3 FB_SIG
+    ./${SignTool} $1 $2 $4
     if [ $? -eq 0 ] ; then
         echo "SIGN PASS !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!(FB SIG)"
     else
         echo "SIGN FAIL !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!(FB SIG)"
         exit 1;
     fi
-    cp -f FB_SIG $4.csd
-    cat $4 >> $4.csd
-    rm -f FB_SIG
-    rm -f $4.sig
-    rm -f $4
-    mv -f $4.csd $4
 fi

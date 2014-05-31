@@ -35,7 +35,7 @@ int fb_main(int argc, char *argv[])
     /* ------------------------------------- */
     /* signature                   */
     /* ------------------------------------- */        
-    if( 0 != pro_fb_sig(argv[3], argv[2], argv[5], argv[4]))
+    if( 0 != pro_fb_sig(argv[3], argv[2]))
     {        
         return -1;
     }
@@ -71,20 +71,18 @@ int main(int argc, char *argv[])
     }  
     else if (argc == 6)
     {
-        if(0 == mcmp(argv[5],"FB_SIG",strlen("FB_SIG")))
-        {
-            MSG("[%s] sign image (fb signature)...\n",MOD);
-            return fb_main(argc, argv);
-        }
-        else
-        {
-            MSG("[%s] sign image (normal)... \n",MOD);
-        }
+        MSG("[%s] sign image (normal)... \n",MOD);
     }
     else if (argc == 5)
-    {            
-        MSG("[%s] generate hdr file ...\n",MOD);            
-        gen_header = TRUE;    
+    {   
+        MSG("[%s] generate hdr file ...\n",MOD);
+        
+        gen_header = TRUE;      
+    }
+    else if (argc == 4)
+    {   
+        MSG("[%s] sign image (fb signature)...\n",MOD);
+        return fb_main(argc, argv);
     }
     else
     {
@@ -95,7 +93,7 @@ int main(int argc, char *argv[])
         MSG("          ./SignTool [KEY] [CONFIG] [INPUT_IMAGE] [OUTPUT_SIGNATURE] [OUTPUT_HEADER] [EXT_SPARSE_HEADER]\n\n");
         
         MSG("Usage:    Sign Image for fastboot signature \n");
-        MSG("          ./SignTool [KEY] [CONFIG] [INPUT_IMAGE] [ORIGINAL_IMAGE] FB_SIG\n\n");
+        MSG("          ./SignTool [KEY] [CONFIG] [INPUT_IMAGE]\n\n");
         
         MSG("Example:\n");
         MSG("          ./SignTool IMG_KEY.ini IMG_CFG.ini u-boot.bin u-boot-signature u-boot-header\n\n");

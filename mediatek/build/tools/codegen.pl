@@ -114,7 +114,11 @@ foreach ($ENV{AUTO_ADD_GLOBAL_DEFINE_BY_VALUE})
    my @defArray = split(/\s+/);
    foreach my $def (@defArray)
    {
-       $flags .= "-D$ENV{$def} " if ($ENV{$def} ne "" and $ENV{$def} ne "no");
+       my @valueArray = split(/\s+/,$ENV{$def});
+       foreach my $value (@valueArray)
+       {   
+           $flags .= "-D$value " if ($value ne "" and $value ne "no");
+       }
    }
 }
 foreach ($ENV{AUTO_ADD_GLOBAL_DEFINE_BY_NAME_VALUE})

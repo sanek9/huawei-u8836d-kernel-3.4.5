@@ -1,14 +1,16 @@
 ifneq ($(CUSTOM_MODEM),)
-MTK_MODEM_PATH = mediatek/custom/common/modem/$(CUSTOM_MODEM)
-MTK_MODEM_FILE = $(if $(wildcard $(MTK_MODEM_PATH)/modem_E2.mak),$(MTK_MODEM_PATH)/modem_E2.mak,$(MTK_MODEM_PATH)/modem.mak)
-$(shell cat $(MTK_MODEM_FILE) | sed -e '/^[ \t]*#/'d | awk -F# '{print $1}' | sed -n '/^\S\+[ \t]*=[ \t]*\S\+/'p | \
-      sed -e 's/^/MODEM_/' > $(MTK_MODEM_PATH)/modem_feature.mak)
-include $(MTK_MODEM_PATH)/modem_feature.mak
+MTK_MODEM_PATH = $(foreach p,$(CUSTOM_MODEM),mediatek/custom/common/modem/$(p))
+MTK_MODEM_FILE := $(foreach p, $(MTK_MODEM_PATH),$(wildcard $(p)/modem*.mak))
+
+$(foreach m,$(CUSTOM_MODEM),$(shell cat $(wildcard mediatek/custom/common/modem/$(m)/modem*.mak) | \
+sed -e '/^[ \t]*#/'d | awk -F# '{print $1}' | sed -n '/^\S\+[ \t]*=[ \t]*\S\+/'p | \
+      sed -e 's/^/MODEM_/' > mediatek/custom/common/modem/$(m)/modem_feature_$(m).mak))
+
+$(foreach m,$(CUSTOM_MODEM), $(eval include mediatek/custom/common/modem/$(m)/modem_feature_$(m).mak))
 endif
 
 #######################################################
 # dependency check between AP side & modem side
-
 
 ifeq (yes,$(strip $(MTK_TTY_SUPPORT)))
    ifeq (FALSE, $(strip $(MODEM_CTM_SUPPORT)))
@@ -23,14 +25,20 @@ ifeq (yes,$(strip $(MTK_VT3G324M_SUPPORT)))
 endif
 
 ifeq (yes,$(strip $(MTK_VT3G324M_SUPPORT)))
-  ifeq ($(findstring modem_3g,$(MTK_MODEM_SUPPORT)),)
-     $(call dep-err-seta-or-offb,MTK_MODEM_SUPPORT,modem_3g_tdd/modem_3g_fdd,MTK_VT3G324M_SUPPORT)
+  ifeq ($(findstring _3g,$(MTK_MODEM_SUPPORT) $(MTK_MD2_SUPPORT)),)
+     $(call dep-err-common, please turn off MTK_VT3G324M_SUPPORT or set MTK_MODEM_SUPPORT/MTK_MD2_SUPPORT as modem_3g_tdd/modem_3g_fdd)
   endif
 endif
 
 ifneq ($(findstring modem_3g,$(MTK_MODEM_SUPPORT)),)
   ifeq ($(findstring hspa,$(CUSTOM_MODEM)),)
     $(call dep-err-seta-or-setb,CUSTOM_MODEM,xxx_hspa_xxx,MTK_MODEM_SUPPORT,none 3g)
+  endif
+endif
+
+ifeq (yes,$(strip $(MTK_ENABLE_MD2)))
+  ifeq (,$(strip $(MTK_MD2_SUPPORT)))
+     $(call dep-err-common,please set MTK_MD2_SUPPORT when MTK_ENABLE_MD2 is enabled)
   endif
 endif
 
@@ -46,13 +54,6 @@ ifeq (MT6573,$(strip $(MTK_PLATFORM)))
     ifneq (modem_3g_tdd,$(strip $(MTK_MODEM_SUPPORT)))
       $(call dep-err-common,please set MTK_MODEM_SUPPORT=modem_3g_tdd when UMTS_MODE_SUPPORT=$(UMTS_MODE_SUPPORT))
     endif
-  endif
-endif
-
-# for dual mic 
-ifeq (yes, $(strip $(MTK_DUAL_MIC_SUPPORT)))
-  ifneq (TRUE,$(strip $(MODEM_DUAL_MIC_SUPPORT)))
-    $(call dep-err-ona-or-offb, DUAL_MIC_SUPPORT, MTK_DUAL_MIC_SUPPORT)
   endif
 endif
 
@@ -89,6 +90,12 @@ endif
 ifeq (yes,$(strip $(MTK_WAPI_SUPPORT)))
   ifneq (yes, $(strip $(MTK_WLAN_SUPPORT)))
     $(call dep-err-ona-or-offb, MTK_WLAN_SUPPORT, MTK_WAPI_SUPPORT)
+  endif
+endif
+
+ifeq (yes,$(strip $(MTK_CTA_SUPPORT)))
+  ifneq (yes, $(strip $(MTK_WAPI_SUPPORT)))
+    $(call dep-err-ona-or-offb, MTK_WAPI_SUPPORT, MTK_CTA_SUPPORT)
   endif
 endif
 
@@ -192,15 +199,6 @@ endif
 ifeq (yes, $(strip $(MTK_DSPIRDBG)))
   ifneq (yes, $(strip $(MTK_MDLOGGER_SUPPORT)))
     $(call dep-err-ona-or-offb, MTK_MDLOGGER_SUPPORT, MTK_DSPIRDBG)
-  endif
-endif
-
-##############################################################
-# for Log2Server feature
-
-ifeq (no, $(strip $(HAVE_AEE_FEATURE)))
-  ifeq (yes, $(strip $(MTK_LOG2SERVER_APP)))
-    $(call dep-err-ona-or-offb, HAVE_AEE_FEATURE, MTK_LOG2SERVER_APP)
   endif
 endif
 
@@ -335,8 +333,8 @@ endif
 # for FD feature
 
 ifeq (yes,$(MTK_FD_SUPPORT))
-  ifeq ($(findstring modem_3g,$(MTK_MODEM_SUPPORT)),)
-     $(call dep-err-seta-or-setb, MTK_FD_SUPPORT,no,MTK_MODEM_SUPPORT,modem_3g_tdd/modem_3g_fdd)
+  ifeq ($(findstring _3g,$(MTK_MODEM_SUPPORT) $(MTK_MD2_SUPPORT)),)
+     $(call dep-err-common, please turn off MTK_FD_SUPPORT or set MTK_MODEM_SUPPORT/MTK_MD2_SUPPORT as modem_3g_tdd/modem_3g_fdd)
   endif
 endif
 
@@ -469,12 +467,6 @@ ifeq (no,$(strip $(MTK_BT_SUPPORT)))
   endif
 endif
 
-ifeq (no,$(strip $(MTK_BT_30_HS_SUPPORT)))
-  ifeq (yes,$(strip $(MTK_BT_PROFILE_AVRCP14)))
-    $(call dep-err-ona-or-offb, MTK_BT_30_HS_SUPPORT, MTK_BT_PROFILE_AVRCP14)
-  endif
-endif
-
 ifeq (no,$(strip $(MTK_BT_40_SUPPORT)))
   ifeq (yes,$(strip $(MTK_BT_PROFILE_PRXM)))
     $(call dep-err-ona-or-offb, MTK_BT_40_SUPPORT, MTK_BT_PROFILE_PRXM)
@@ -532,6 +524,17 @@ ifeq (no,$(strip $(MTK_NFC_SUPPORT)))
   endif
 endif
 
+ifeq (yes,$(strip $(MTK_NFC_SUPPORT)))
+  ifeq (no,$(strip $(CONFIG_MTK_NFC)))
+    $(call dep-err-ona-or-offb, CONFIG_MTK_NFC, MTK_NFC_SUPPORT)
+  endif
+endif
+
+ifeq (no,$(strip $(MTK_NFC_SUPPORT)))
+  ifeq (yes,$(strip $(CONFIG_MTK_NFC)))
+    $(call dep-err-ona-or-offb, MTK_NFC_SUPPORT, CONFIG_MTK_NFC)
+  endif
+endif
 ##############################################################
 # for fm feature
 ifeq (no,$(strip $(MTK_FM_SUPPORT)))
@@ -583,15 +586,6 @@ endif
 ifeq (yes,$(MODEM_UMTS_TDD128_MODE))
   ifneq (modem_3g,$(MTK_MODEM_SUPPORT))
      $(call dep-err-seta-or-setb, MODEM_UMTS_TDD128_MODE,no,MTK_MODEM_SUPPORT,modem_3g)
-  endif
-endif
-
-##############################################################
-# for SRS
-
-ifeq (no,$(MTK_INTERNAL))
-  ifeq (yes,$(HAVE_SRSAUDIOEFFECT_FEATURE))
-     $(call dep-err-ona-or-offb, MTK_INTERNAL, HAVE_SRSAUDIOEFFECT_FEATURE)
   endif
 endif
 
@@ -695,6 +689,16 @@ ifneq (yes,$(strip $(MTK_TABLET_PLATFORM)))
       endif       
     endif
   endif
+  ifeq (720,$(strip $(LCM_WIDTH)))
+    ifeq (1280,$(strip $(LCM_HEIGHT)))
+      ifeq ($(filter hdpi,$(MTK_PRODUCT_LOCALES)),)
+        $(call dep-err-common, Please add hdpi to MTK_PRODUCT_LOCALES or set different LCM_WIDTH and LCM_HEIGHT)
+      endif  
+      ifeq ($(filter xhdpi,$(MTK_PRODUCT_LOCALES)),)
+        $(call dep-err-common, Please add xhdpi to MTK_PRODUCT_LOCALES or set different LCM_WIDTH and LCM_HEIGHT)
+      endif 
+    endif
+  endif
 endif
 
 ############################################################
@@ -756,9 +760,35 @@ ifeq ($(strip $(MTK_MEDIA3D_APP)),yes)
     endif
   endif
 endif
+
 ############################################################
-ifeq ($(strip $(MTK_AP_SPEECH_ENHANCEMENT)),yes)
-  ifneq ($(strip $(MTK_AUDIO_HD_REC_SUPPORT)),yes)
-     $(call dep-err-ona-or-offb, MTK_AUDIO_HD_REC_SUPPORT, MTK_AP_SPEECH_ENHANCEMENT)
+ifeq ($(strip $(MTK_HDMI_SUPPORT)),yes)
+  ifeq ($(strip $(CUSTOM_KERNEL_HDMI)),)
+    $(call dep-err-common, CUSTOM_KERNEL_HDMI should not be NULL when MTK_HDMI_SUPPORT=yes)
   endif
 endif
+############################################################
+ifneq ($(strip $(OPTR_SPEC_SEG_DEF)), NONE)
+  ifneq ($(strip $(MTK_NETWORK_TYPE_ALWAYS_ON)), no)
+     $(call dep-err-common, Please set OPTR_SPEC_SEG_DEF as NONE or set MTK_NETWORK_TYPE_ALWAYS_ON as no)
+  endif
+endif
+############################################################
+ifeq ($(strip $(MTK_S3D_SUPPORT)),yes)
+  ifneq ($(strip $(MTK_STEREO3D_WALLPAPER_APP)),yes)
+    $(call dep-err-ona-or-offb, MTK_STEREO3D_WALLPAPER_APP, MTK_S3D_SUPPORT)
+  endif
+endif
+ifneq ($(strip $(MTK_S3D_SUPPORT)),yes)
+  ifeq ($(strip $(MTK_STEREO3D_WALLPAPER_APP)),yes)
+    $(call dep-err-ona-or-offb, MTK_S3D_SUPPORT, MTK_STEREO3D_WALLPAPER_APP)
+  endif
+endif
+############################################################
+ifeq (yes,$(strip $(MTK_FD_FORCE_REL_SUPPORT)))
+  ifneq (yes,$(strip $(MTK_FD_SUPPORT)))
+    $(call dep-err-ona-or-offb, MTK_FD_SUPPORT, MTK_FD_FORCE_REL_SUPPORT)
+  endif
+endif
+
+

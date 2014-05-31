@@ -5,7 +5,8 @@
 ##########################################################
 
 my $prj = $ARGV[0];
-my $modem_encode = $ARGV[1];
+#my $modem_encode = $ARGV[1];
+my $modem_encode = "no";
 my $modem_auth = $ARGV[2];
 my $custom_dir = $ARGV[3];
 my $secro_ac = $ARGV[4];

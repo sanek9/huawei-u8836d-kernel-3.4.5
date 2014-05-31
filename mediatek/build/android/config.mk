@@ -182,6 +182,8 @@ mtk-clean:
 	    echo "Cleaning $$dir..."; \
 	    rm -rf $$dir; \
 	done
+dump-comp-build-info:
+	@echo Dump componenet level build info.
 
 MTK_INTERNAL_PLATFORM_API_FILE := $(TARGET_OUT_COMMON_INTERMEDIATES)/PACKAGING/mediatek_public_api.txt
 JPE_TOOL := $(HOST_OUT_JAVA_LIBRARIES)/jpe_tool.jar

@@ -27,17 +27,7 @@ last_released_mtk_sdk_version := $(lastword $(call numerically_sort,\
 
 # Check that the API we're building hasn't broken the last-released SDK version.
 # When fails, build will breaks with message from "apicheck_msg_last" text file shown.
-ifeq ($(strip $(PARTIAL_BUILD)),true)
-$(eval $(call check-mtk-api, \
-	checkmtkapi-last, \
-	$(SRC_MTK_API_DIR)/customer/$(last_released_mtk_sdk_version).txt, \
-	$(MTK_INTERNAL_PLATFORM_API_FILE), \
-	-error 2 -error 3 -error 4 -error 5 -error 6 -error 7 -error 8 -error 9 -error 10 \
-	-error 11 -error 12 -error 13 -error 14 -error 15 -error 16 -error 17 -error 18 \
-	-error 19 -error 20 -error 21 -error 23 -error 24 , \
-	cat $(BUILD_SYSTEM_MTK_EXTENSION)/apicheck_msg_last.txt \
-	))
-else
+ifneq ($(strip $(PARTIAL_BUILD)),true)
 $(eval $(call check-mtk-api, \
 	checkmtkapi-last, \
 	$(SRC_MTK_API_DIR)/$(last_released_mtk_sdk_version).txt, \

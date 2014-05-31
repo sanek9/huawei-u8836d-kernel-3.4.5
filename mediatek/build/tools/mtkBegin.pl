@@ -13,14 +13,6 @@ $tmpDir = "vendor/mediatek/$prj/artifacts/kernel/out/";
 exit 0, if (!-e $flag_subrel && !-e $flag_custrel);
 exit 0, if (-e $flag_subrel && -e $flag_custrel);
 
-# Create tinno artifact projects from MTK given template.
-if ($prj ne "tinno77_jb" && $prj ne "banyan_addon")
-{
-    system("rsync -a --delete-after --exclude=.git --exclude=artifacts/out/target/product/* vendor/mediatek/tinno77_jb/ vendor/mediatek/$prj ");
-    system("rsync -a --delete-after --exclude=.git vendor/mediatek/tinno77_jb/artifacts/out/target/product/tinno77_jb/ vendor/mediatek/$prj/artifacts/out/target/product/$prj");
-    system("sed -i s/\\\\/tinno77_jb\\\\//\\\\/$prj\\\\//g vendor/mediatek/$prj/artifacts/target.txt");
-}
-
 if (!-e $flag_subrel)
 #if (0)
 {

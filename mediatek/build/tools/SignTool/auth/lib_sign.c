@@ -32,8 +32,7 @@
  **************************************************************************/
 SEC_CRYPTO_HASH_TYPE g_hash_type = SEC_CRYPTO_HASH_SHA1;
 SEC_CRYPTO_SIGNATURE_TYPE g_sig_type = SEC_CRYPTO_SIG_RSA1024;
-static unsigned int g_fb_chunk_size = 0x1000000; //default is 16MB
-#define FIX_FB_PADDING_HEADER_SIZE 0x4000 //default is 16KB
+static unsigned int g_fb_chunk_size = 0x2000000; //default is 32MB
 
 
 /**************************************************************************
@@ -1030,19 +1029,16 @@ int pro_img(char *hs_name, char *img_name,char *hdr_name,char sparse_header,char
 
 #define DUMP_FB_FOR_DEBUG 0
 
-int pro_fb_sig(char *input_img, char *cfg_name, char *output_hdr, char *original_img_name)
+int pro_fb_sig(char *input_img, char *cfg_name)
 {
     uint32 i = 0, ret = 0;   
     char output_file[256] = {0};
     uint32 input_len = 0;
     uint32 last_slash_pot = 0;
-    uint32 last_underscore_pot = 0;
     SEC_IMG_HEADER sec = {0};
-    SEC_FB_HEADER fb_hdr = {0};
     uchar *fb_chunk_buffer = NULL;
     uchar *fb_multiple_hash_buffer = NULL;
     uchar *fb_signature_file_buffer = NULL;
-    uchar *fb_pad_hdr_file_buffer = NULL;
     uint32 fb_chunk_count = 0; 
     uint32 fb_multiple_hash_buffer_len = 0; 
     uint32 hash_size = get_hash_size(g_hash_type);
@@ -1059,19 +1055,16 @@ int pro_fb_sig(char *input_img, char *cfg_name, char *output_hdr, char *original
     /* generate the output file name from input_img file name */
     /* ------------------------------------- */ 
     input_len = strlen(input_img);
-    
     for(i=0; i<input_len; i++)
     {
         if(input_img[i] == '/'){
             last_slash_pot = i;
         }
-        if(input_img[i] == '-'){
-            last_underscore_pot = i;
-        }
     }
-
-    mcpy(output_file, input_img, input_len);
-    mcpy(output_file+input_len, FB_SIG_EXT_NAME, strlen(FB_SIG_EXT_NAME));
+    mcpy(output_file, input_img, last_slash_pot+1);
+    mcpy(output_file+last_slash_pot+1, FB_SIG_DIR_NAME, strlen(FB_SIG_DIR_NAME));
+    mcpy(output_file+last_slash_pot+1+strlen(FB_SIG_DIR_NAME), input_img+last_slash_pot+1, input_len-last_slash_pot-1);
+    mcpy(output_file+input_len+strlen(FB_SIG_DIR_NAME), FB_SIG_EXT_NAME, strlen(FB_SIG_EXT_NAME));
 
     MSG("[%s] Signed file path is '%s'\n",MOD,input_img);
     MSG("[%s] FB SIG path is '%s'\n",MOD,output_file);
@@ -1084,20 +1077,6 @@ int pro_fb_sig(char *input_img, char *cfg_name, char *output_hdr, char *original
     {
         return -1;
     }
-    
-    /* ------------------------------------- */
-    /* get the original image length from original_img_name */
-    /* ------------------------------------- */ 
-    FILE *orig_img_fd = fopen(original_img_name,"r"); 
-    if(orig_img_fd == 0)
-    {
-        MSG("[%s] %s not found\n",MOD,original_img_name);
-        ret = -2;
-        goto orig_img_err;
-    }    
-    fseek(orig_img_fd, 0, SEEK_END);
-    fb_hdr.orig_img_size = ftell(orig_img_fd);
-    fclose(orig_img_fd);
 
     /* ------------------------------------- */
     /* get the image length from input_img */
@@ -1112,39 +1091,30 @@ int pro_fb_sig(char *input_img, char *cfg_name, char *output_hdr, char *original
     fseek(img_fd, 0, SEEK_END);
     sec.img_len = ftell(img_fd);
 
-
-
     /* ------------------------------------- */
     /* reset for fb header */
     /* ------------------------------------- */ 
     sec.magic_num = FB_IMG_MAGIC;
-    fb_hdr.magic_num = FB_IMG_MAGIC;
-    fb_hdr.hdr_ver = 0x01;
-    fb_hdr.chunk_size = g_fb_chunk_size;
-    if(sec.img_len <= (g_fb_chunk_size-FIX_FB_PADDING_HEADER_SIZE))
-    {
-        fb_hdr.hash_count = 1;
-    }
-    else
-    {
-        fb_hdr.hash_count = ((sec.img_len-(g_fb_chunk_size-FIX_FB_PADDING_HEADER_SIZE)-1)/g_fb_chunk_size)+1+1;
-    }
-    fb_chunk_count = fb_hdr.hash_count;
-    memcpy(fb_hdr.part_name, input_img+last_slash_pot+1, last_underscore_pot-last_slash_pot-1);
+    sec.img_off = g_fb_chunk_size;  //check size of fb
+    sec.s_off = 0x0;                //reserve for fb header
+    sec.s_len = 0x0;                //reserve for fb header
+    sec.sig_off = 0x0;              //reserve for fb header
+    sec.sig_len = 0x0;              //reserve for fb header
+    fb_chunk_count = ((sec.img_len-1)/g_fb_chunk_size)+1;
 
     /* ------------------------------------- */
     /* dump information */  
     /* ------------------------------------- */ 
-    MSG("[%s] sec.magic_num        = 0x%x\n",MOD,sec.magic_num,sec.magic_num);
-    MSG("[%s] sec.cust_name        = %s\n",MOD,sec.cust_name); 
-    MSG("[%s] sec.img_ver          = %d (0x%x)\n",MOD,sec.img_ver,sec.img_ver);     
-    MSG("[%s] sec.img_len          = %d (0x%x)\n",MOD,sec.img_len,sec.img_len);   
-    MSG("[%s] fb_hdr.magic_num     = %d (0x%x)\n",MOD,fb_hdr.magic_num,fb_hdr.magic_num);     
-    MSG("[%s] fb_hdr.hdr_ver       = %d (0x%x)\n",MOD,fb_hdr.hdr_ver,fb_hdr.hdr_ver);     
-    MSG("[%s] fb_hdr.hash_count    = %d (0x%x)\n",MOD,fb_hdr.hash_count,fb_hdr.hash_count);         
-    MSG("[%s] fb_hdr.chunk_size    = %d (0x%x)\n",MOD,fb_hdr.chunk_size,fb_hdr.chunk_size);        
-    MSG("[%s] fb_hdr.part_name     = '%s' \n",MOD,fb_hdr.part_name);    
-    MSG("[%s] fb_hdr.orig_img_size = %d (0x%x)\n",MOD,fb_hdr.orig_img_size,fb_hdr.orig_img_size);        
+    MSG("[%s] fb_hdr.magic_num     = 0x%x\n",MOD,sec.magic_num,sec.magic_num);
+    MSG("[%s] fb_hdr.cust_name     = %s\n",MOD,sec.cust_name); 
+    MSG("[%s] fb_hdr.img_ver       = %d (0x%x)\n",MOD,sec.img_ver,sec.img_ver);     
+    MSG("[%s] fb_hdr.img_len       = %d (0x%x)\n",MOD,sec.img_len,sec.img_len);     
+    MSG("[%s] fb_hdr.chunk_size    = %d (0x%x)\n",MOD,sec.img_off,sec.img_off);     
+    MSG("[%s] fb_hdr.s_off         = %d (0x%x)\n",MOD,sec.s_off,sec.s_off);     
+    MSG("[%s] fb_hdr.s_len         = %d (0x%x)\n",MOD,sec.s_len,sec.s_len);     
+    MSG("[%s] fb_hdr.sig_off       = %d (0x%x)\n",MOD,sec.sig_off,sec.sig_off);         
+    MSG("[%s] fb_hdr.sig_len       = %d (0x%x)\n",MOD,sec.sig_len,sec.sig_len);        
+    MSG("[%s] fb chunk count       = %d\n",MOD,fb_chunk_count);
 
     /* ------------------------------------- */
     /* prepare fb chunk buffer */
@@ -1187,18 +1157,10 @@ int pro_fb_sig(char *input_img, char *cfg_name, char *output_hdr, char *original
     while(left_size)
     {
         /* load data */
-        if(current_chunk_count==0)
-        {
-            read_size = (left_size>=(g_fb_chunk_size-FIX_FB_PADDING_HEADER_SIZE))?(g_fb_chunk_size-FIX_FB_PADDING_HEADER_SIZE):left_size;
-        }
-        else
-        {
-            read_size = (left_size>=g_fb_chunk_size)?g_fb_chunk_size:left_size;
-        }
+        read_size = (left_size>=g_fb_chunk_size)?g_fb_chunk_size:left_size;
         fseek(img_fd,seek_pos*sizeof(char),SEEK_SET);  
         br = fread(fb_chunk_buffer,1,read_size,img_fd);   
-
-        DBG("[%s] chunk[%d], read size %d (0x%x) \n",MOD, current_chunk_count, read_size, read_size);   
+        
 #if DUMP_FB_FOR_DEBUG
         DBG("[%s] read pos 0x%x, read size %d (0x%x) \n",MOD, seek_pos, read_size, read_size);   
 #endif
@@ -1243,7 +1205,7 @@ int pro_fb_sig(char *input_img, char *cfg_name, char *output_hdr, char *original
     /* ------------------------------------- */
     /* generate final hash */
     /* ------------------------------------- */ 
-    mcpy(fb_multiple_hash_buffer,&fb_hdr,SEC_IMG_HDR_SZ);
+    mcpy(fb_multiple_hash_buffer,&sec,SEC_IMG_HDR_SZ);
 #if DUMP_FB_FOR_DEBUG
     /* dump multiple hash buffer for debug             */ 
     DBG("[%s] (final)multiple hash header value : \n",MOD);    
@@ -1311,7 +1273,7 @@ int pro_fb_sig(char *input_img, char *cfg_name, char *output_hdr, char *original
     /* prepare fb signature file buffer*/
     /* ------------------------------------- */ 
     memset(fb_signature_file_buffer, 0x00, FB_SIG_FILE_SIZE);
-    mcpy(fb_signature_file_buffer,&fb_hdr,SEC_IMG_HDR_SZ);
+    mcpy(fb_signature_file_buffer,&sec,SEC_IMG_HDR_SZ);
     mcpy(fb_signature_file_buffer+SEC_IMG_HDR_SZ,sig_buf,sig_size);
     mcpy(fb_signature_file_buffer+SEC_IMG_HDR_SZ+sig_size,hash_buf,hash_size);
     
@@ -1323,42 +1285,11 @@ int pro_fb_sig(char *input_img, char *cfg_name, char *output_hdr, char *original
     if(fb_sig_fd == 0)
     {
         MSG("[%s] %s not found\n",MOD,output_file);
-        ret = -8;
         goto _open_fb_sig_file_fail;
     }
     fwrite (fb_signature_file_buffer , 1 , FB_SIG_FILE_SIZE , fb_sig_fd);
 
     fclose(fb_sig_fd);
-
-    
-    /* ------------------------------------- */
-    /* generate fb padding header file */
-    /* ------------------------------------- */ 
-    FILE *fb_pad_hdr_fd = fopen(output_hdr,"wb");      
-    
-    if(fb_pad_hdr_fd == 0)
-    {
-        MSG("[%s] %s not found\n",MOD,output_hdr);
-        ret = -9;
-        goto _open_fb_pad_hdr_file_fail;
-    }
-    fb_pad_hdr_file_buffer = (uchar*) malloc(FIX_FB_PADDING_HEADER_SIZE);
-    if(fb_pad_hdr_file_buffer == NULL)
-    {
-        ret = -10;
-        MSG("[%s] allocate for size '%d (0x%x)' of buffer failed\n",MOD,FIX_FB_PADDING_HEADER_SIZE,FIX_FB_PADDING_HEADER_SIZE);
-        goto _fb_pad_hdr_buf_alloc_fail;
-    }
-    memset(fb_pad_hdr_file_buffer, 0x00, FIX_FB_PADDING_HEADER_SIZE);   
-    memcpy(fb_pad_hdr_file_buffer, fb_signature_file_buffer, FB_SIG_FILE_SIZE);
-    memcpy(fb_pad_hdr_file_buffer+FB_SIG_FILE_SIZE, fb_multiple_hash_buffer, fb_multiple_hash_buffer_len);
-    fwrite (fb_pad_hdr_file_buffer , 1 , FIX_FB_PADDING_HEADER_SIZE , fb_pad_hdr_fd);
-
-    free(fb_pad_hdr_file_buffer);
-
-_fb_pad_hdr_buf_alloc_fail:    
-    fclose(fb_pad_hdr_fd);
-_open_fb_pad_hdr_file_fail:
 _open_fb_sig_file_fail:
 _final_signature_fail:
 _final_fb_hash_fail:
@@ -1372,7 +1303,6 @@ _read_file_error:
 _fb_chunk_buf_alloc_fail:   
     fclose(img_fd); 
 input_img_err:
-orig_img_err:
 
     return ret;
 }

@@ -16,7 +16,7 @@ ifdef OPTR_SPEC_SEG_DEF
   endif
 endif
 
-remake update-api javaoptgen drvgen emigen nandgen: custgen
+remake update-api $(ALLJAVAOPTFILES) drvgen emigen nandgen: custgen
 #ifneq ($(PROJECT),)
 # include $(PRJ_MF)
 #endif
@@ -27,7 +27,7 @@ remake update-api javaoptgen drvgen emigen nandgen: custgen
          preloader uboot kernel android \
          check-modem update-modem sign-image encrypt-image sign-modem check-dep \
          dump-memusage gen-relkey check-appres \
-         codegen btcodegen javaoptgen emigen nandgen custgen drvgen ptgen \
+         codegen btcodegen javaoptgen clean-javaoptgen emigen nandgen custgen drvgen ptgen \
          update-api modem-info bindergen clean-modem
 
 #MKTOPDIR      =  $(shell pwd)
@@ -95,7 +95,15 @@ ANDROID_IMAGES   := $(LOGDIR)/$(PROJECT)/system.img \
 ifeq (true,$(BUILD_TINY_ANDROID))
  ANDROID_IMAGES := $(filter-out %recovery.img,$(ANDROID_IMAGES))
 endif
-
+ifneq ($(ACTION),)
+ANDROID_TARGET_IMAGES :=$(filter %/$(patsubst %image,%.img,$(ACTION)),$(ANDROID_IMAGES))
+ifeq (${ACTION},otapackage)
+ANDROID_TARGET_IMAGES :=$(ANDROID_IMAGES) 
+endif
+ifeq (${ACTION},snod)
+ANDROID_TARGET_IMAGES :=$(filter %/system.img,$(ANDROID_IMAGES))
+endif
+endif
 ifeq (MT6573, $(MTK_PLATFORM))
   ifeq (android, $(CUR_MODULE))
     ANDROID_IMAGES += $(LOGDIR)/$(PROJECT)/DSP_BL
@@ -191,10 +199,12 @@ endif
 
 ALL_MODULES += android
 
+-include mediatek/build/tools/preprocess/preprocess.mk
+
 ifneq ($(MTK_PTGEN_SUPPORT),no)
-newall: cleanall javaoptgen emigen nandgen ptgen custgen codegen remakeall
+newall: cleanall emigen nandgen ptgen custgen codegen remakeall
 else
-newall: cleanall javaoptgen emigen nandgen custgen codegen remakeall
+newall: cleanall emigen nandgen custgen codegen remakeall
 endif
 
 check-dep: custgen
@@ -215,9 +225,12 @@ ifeq ($(filter -k, $(CMD_ARGU)),)
 	  if [ $${PIPESTATUS[0]} != 0 ]; then exit 1; fi; \
       done
 else
-	$(hide) for i in $(ALL_MODULES); do \
-	  $(REMAKECMD) CUR_MODULE=$$i $(subst all,,$@); \
-      done
+	$(hide) let count=0; for i in $(ALL_MODULES); do \
+	$(REMAKECMD) CUR_MODULE=$$i $(subst all,,$@); \
+	last_return_code=$${PIPESTATUS[0]}; \
+	if [ $$last_return_code != 0 ]; then let count=$$count+$$last_return_code; fi; \
+	done; \
+	exit $$count
 endif
 
 
@@ -226,6 +239,7 @@ ANDROID_NATIVE_TARGETS := \
          cts sdk win_sdk otapackage banyan_addon dist updatepackage \
          snod bootimage systemimage recoveryimage secroimage target-files-package \
          factoryimage userdataimage userdataimage-nodeps
+ANDROID_NATIVE_TARGETS += dump-comp-build-info
 .PHONY: $(ANDROID_NATIVE_TARGETS)
 
 systemimage: check-modem
@@ -254,14 +268,17 @@ $(ANDROID_NATIVE_TARGETS):
            ) \
          )
 
-update-api: javaoptgen
-banyan_addon: javaoptgen
-win_sdk: javaoptgen
+update-api: $(ALLJAVAOPTFILES)
+banyan_addon: $(ALLJAVAOPTFILES)
+win_sdk: $(ALLJAVAOPTFILES)
 
 ifeq ($(TARGET_PRODUCT),emulator)
    TARGET_PRODUCT := generic
 endif
 .PHONY: mm
+ifeq ($(HAVE_PREPROCESS_FLOW),true)
+mm: run-preprocess
+endif
 mm:
 	$(hide) echo $(SHOWTIME) $@ing...
 	$(hide) echo -e \\t\\t\\t\\b\\b\\b\\bLOG: $(S_LOG)$@.log
@@ -293,6 +310,8 @@ remake:
 #### Remove old modem files under mediatek/custom/out/$project/modem ####
 clean-modem:
 	$(hide) rm -rf $(strip $(MTK_ROOT_CUSTOM_OUT))/modem
+	$(hide) rm -rf $(strip $(LOGDIR)/$(PROJECT))/system/etc/extmddb
+	$(hide) rm -rf $(strip $(LOGDIR)/$(PROJECT))/system/etc/mddb
 
 update-modem: clean-modem custgen check-modem sign-modem
 	$(hide) echo $(SHOWTIME) $@ing...
@@ -370,13 +389,36 @@ custgen:
 #	  $(SHOWRSLT) $${PIPESTATUS[0]} $(LOG)$@.log || \
 #	  $(SHOWRSLT) $${PIPESTATUS[0]} $(LOG)$@.log
 
-javaoptgen:
+JAVAOPTFILEPATH := mediatek/frameworks/common/src/com/mediatek/common/featureoption
+JAVAOPTFILE := $(JAVAOPTFILEPATH)/FeatureOption.java
+
+$(JAVAOPTFILE): mediatek/build/tools/javaoptgen.pl $(PRJ_MF) $(OPTR_MF) mediatek/build/tools/javaoption.pm
+	$(hide) echo $(SHOWTIME) gen $@ ...
+	$(hide) echo -e \\t\\t\\t\\b\\b\\b\\bLOG: $(S_LOG)javaoptgen.log
+	$(hide) perl mediatek/build/tools/javaoptgen.pl $(PRJ_MF) $(OPTR_MF) $(DEAL_STDOUT_JAVAOPTGEN)
+
+JAVAIMEOPTFILE := $(JAVAOPTFILEPATH)/IMEFeatureOption.java
+$(JAVAIMEOPTFILE): mediatek/build/tools/gen_java_ime_definition.pl $(PRJ_MF)
+	$(hide) echo $(SHOWTIME) gen $@ ...
+	$(hide) echo -e \\t\\t\\t\\b\\b\\b\\bLOG: $(S_LOG)imejavaoptgen.log
+	$(hide) perl mediatek/build/tools/gen_java_ime_definition.pl $(PRJ_MF) $(DEAL_STDOUT_IMEJAVAOPTGEN)
+
+ALLJAVAOPTFILES := $(JAVAIMEOPTFILE) $(JAVAOPTFILE)
+clean-javaoptgen:
 	$(hide) echo $(SHOWTIME) $@ing ...
-	$(hide) echo -e \\t\\t\\t\\b\\b\\b\\bLOG: $(S_LOG)$@.log
-	$(hide) perl mediatek/build/tools/javaoptgen.pl $(PRJ_MF) $(OPTR_MF) $(DEAL_STDOUT_JAVAOPTGEN) && \
-	perl mediatek/build/tools/gen_java_ime_definition.pl $(PRJ_MF) $(DEAL_STDOUT_IMEJAVAOPTGEN) && \
-	  $(SHOWRSLT) $${PIPESTATUS[0]} $(LOG)$@.log || \
-          $(SHOWRSLT) $${PIPESTATUS[0]} $(LOG)$@.log
+	$(hide) echo clean $(ALLJAVAOPTFILES)
+	$(hide) rm -rf $(ALLJAVAOPTFILES)
+
+javaoptgen: $(ALLJAVAOPTFILES)
+	$(hide) echo Done java optgen
+
+#javaoptgen:
+#	$(hide) echo $(SHOWTIME) $@ing ...
+#	$(hide) echo -e \\t\\t\\t\\b\\b\\b\\bLOG: $(S_LOG)$@.log
+#	$(hide) perl mediatek/build/tools/javaoptgen.pl $(PRJ_MF) $(OPTR_MF) $(DEAL_STDOUT_JAVAOPTGEN) && \
+#	perl mediatek/build/tools/gen_java_ime_definition.pl $(PRJ_MF) $(DEAL_STDOUT_IMEJAVAOPTGEN) && \
+#	  $(SHOWRSLT) $${PIPESTATUS[0]} $(LOG)$@.log || \
+#          $(SHOWRSLT) $${PIPESTATUS[0]} $(LOG)$@.log
 
 sign-image:
 	$(hide) echo $(SHOWTIME) $@ing ...
@@ -411,31 +453,17 @@ endif
 
 ifeq ($(filter generic banyan_addon,$(PROJECT)),)
   ifneq ($(MTK_PLATFORM),MT8320)
+check-modem: clean-modem custgen
 check-modem: PRIVATE_CHK_MD_TOOL := mediatek/build/tools/checkMD.pl
-check-modem: PRIVATE_DSP_BL := \
-             $(if $(wildcard $(MTK_ROOT_CUSTOM)/$(PROJECT)/modem/$(strip $(CUSTOM_MODEM))/DSP_BL), \
-               $(MTK_ROOT_CUSTOM)/$(PROJECT)/modem/$(strip $(CUSTOM_MODEM))/DSP_BL, \
-               $(MTK_ROOT_CUSTOM)/common/modem/$(strip $(CUSTOM_MODEM))/DSP_BL \
-              )
-check-modem: PRIVATE_DSP_ROM := \
-             $(if $(wildcard $(MTK_ROOT_CUSTOM)/$(PROJECT)/modem/$(strip $(CUSTOM_MODEM))/DSP_ROM), \
-               $(MTK_ROOT_CUSTOM)/$(PROJECT)/modem/$(strip $(CUSTOM_MODEM))/DSP_ROM, \
-               $(MTK_ROOT_CUSTOM)/common/modem/$(strip $(CUSTOM_MODEM))/DSP_ROM \
-              )
-check-modem: PRIVATE_MODEM := \
-             $(if $(wildcard $(MTK_ROOT_CUSTOM)/$(PROJECT)/modem/$(strip $(CUSTOM_MODEM))/modem.img), \
-               $(MTK_ROOT_CUSTOM)/$(PROJECT)/modem/$(strip $(CUSTOM_MODEM))/modem.img, \
-               $(MTK_ROOT_CUSTOM)/common/modem/$(strip $(CUSTOM_MODEM))/modem.img \
-              )
+check-modem: PRIVATE_MODEM_PATH := $(strip $(MTK_ROOT_CUSTOM_OUT))/modem
 check-modem:
 	$(hide) echo $(SHOWTIME) $@ing ...
 	$(hide) echo -e \\t\\t\\t\\b\\b\\b\\bLOG: $(S_LOG)$@.log
 	$(hide) perl $(PRIVATE_CHK_MD_TOOL) \
-                     $(PRIVATE_DSP_BL) \
-                     $(PRIVATE_DSP_ROM) \
-                     $(PRIVATE_MODEM) \
-                     $(strip $(MTK_MODEM_SUPPORT)) \
+                     $(strip $(PRIVATE_MODEM_PATH)) \
                      $(strip $(MTK_PLATFORM)) \
+                     $(strip $(MTK_MODEM_SUPPORT)) \
+                     $(strip $(MTK_MD2_SUPPORT)) \
                      $(DEAL_STDOUT_CHECK_MODEM) && \
           $(SHOWRSLT) $${PIPESTATUS[0]} $(LOG)$@.log || \
           $(SHOWRSLT) $${PIPESTATUS[0]} $(LOG)$@.log
@@ -447,7 +475,7 @@ check-modem: ;
 endif
 
 emigen:
-ifneq (,$(filter MT8320 MT6575 MT6577 MT6583,$(MTK_PLATFORM)))
+ifeq (,$(filter MT8320 MT6575 MT6577 MT6589,$(MTK_PLATFORM)))
 ifneq ($(PROJECT), generic)
 	$(hide) echo $(SHOWTIME) $@ing ...
 	$(hide) echo -e \\t\\t\\t\\b\\b\\b\\bLOG: $(S_LOG)$@.log
@@ -460,7 +488,7 @@ endif
 
 nandgen:
 ifneq ($(PROJECT), generic)
-ifneq (,$(filter MT6575 MT6577 MT6573,$(MTK_PLATFORM)))
+ifneq ($(strip $(MTK_EMMC_SUPPORT)),yes)
 	$(hide) echo $(SHOWTIME) $@ing ...
 	$(hide) echo -e \\t\\t\\t\\b\\b\\b\\bLOG: $(S_LOG)$@.log
 	$(hide) perl mediatek/build/tools/emigen/$(MTK_PLATFORM)/nandgen.pl \
@@ -551,11 +579,11 @@ ifneq ($(ACTION), )
 	  $(SHOWRSLT) $${PIPESTATUS[0]} $(MODULE_LOG) $(ACTION) || \
 	  $(SHOWRSLT) $${PIPESTATUS[0]} $(MODULE_LOG) $(ACTION)) && cd $(MKTOPDIR)
 else
-ifneq (,$(filter MT6516 MT6575 MT6577 MT6573,$(MTK_PLATFORM)))
+ifneq (,$(filter MT6516 MT6575 MT6577 MT6573 MT6589,$(MTK_PLATFORM)))
 	$(hide) perl mediatek/build/tools/emigen/$(MTK_PLATFORM)/emigen.pl $(CUSTOM_MEMORY_HDR) \
                 $(MEMORY_DEVICE_XLS) $(MTK_PLATFORM) $(PROJECT) $(DEAL_STDOUT)
 endif
-ifneq (,$(filter MT6575 MT6577 MT6573,$(MTK_PLATFORM)))
+ifneq ($(strip $(MTK_EMMC_SUPPORT)),yes)
 	$(hide) perl mediatek/build/tools/emigen/$(MTK_PLATFORM)/nandgen.pl \
                      $(CUSTOM_NAND_HDR) \
                      $(MEMORY_DEVICE_XLS) \
@@ -594,7 +622,6 @@ lk:
 ifeq ($(BUILD_LK),yes)
 	$(hide) echo $(SHOWTIME) $(SHOWBUILD)ing $@...
 	$(hide) echo -e \\t\\t\\t\\b\\b\\b\\bLOG: $(S_MODULE_LOG)
-	$(hide) cp $(LK_WD)/project/tinno77_jb.mk $(LK_WD)/project/$(PROJECT).mk
 ifneq ($(ACTION), )
 	$(hide) cd $(LK_WD) && \
 	  (PROJECT=$(PROJECT) make clean $(DEAL_STDOUT) && \
@@ -605,7 +632,7 @@ ifneq (,$(filter MT6516 MT6575 MT6577 MT6573,$(MTK_PLATFORM)))
 	$(hide) perl mediatek/build/tools/emigen/$(MTK_PLATFORM)/emigen.pl $(CUSTOM_MEMORY_HDR) \
                 $(MEMORY_DEVICE_XLS) $(MTK_PLATFORM) $(PROJECT) $(DEAL_STDOUT)
 endif
-ifneq (,$(filter MT6575 MT6577 MT6573,$(MTK_PLATFORM)))
+ifneq ($(strip $(MTK_EMMC_SUPPORT)),yes)
 	$(hide) perl mediatek/build/tools/emigen/$(MTK_PLATFORM)/nandgen.pl \
                      $(CUSTOM_NAND_HDR) \
                      $(MEMORY_DEVICE_XLS) \
@@ -659,7 +686,7 @@ ifneq (,$(filter MT6516 MT6575 MT6577 MT6573,$(MTK_PLATFORM)))
 	$(hide) perl mediatek/build/tools/emigen/$(MTK_PLATFORM)/emigen.pl $(CUSTOM_MEMORY_HDR) \
                 $(MEMORY_DEVICE_XLS) $(MTK_PLATFORM) $(PROJECT) $(DEAL_STDOUT)
 endif
-ifneq (,$(filter MT6575 MT6577 MT6573,$(MTK_PLATFORM)))
+ifneq ($(strip $(MTK_EMMC_SUPPORT)),yes)
 	$(hide) perl mediatek/build/tools/emigen/$(MTK_PLATFORM)/nandgen.pl \
                      $(CUSTOM_NAND_HDR) \
                      $(MEMORY_DEVICE_XLS) \
@@ -734,15 +761,23 @@ endif
 
 
 ifneq ($(ACTION),clean)
-  ifeq ($(filter MT6583,$(MTK_PLATFORM)),)
-    ifneq ($(MTK_SIGNMODEM_SUPPORT),no)
+  ifneq ($(MTK_SIGNMODEM_SUPPORT),no)
 android: check-modem sign-modem
-    else
+  else
 android: check-modem
-    endif
+  endif
+android: $(ALLJAVAOPTFILES)
+else
+android: clean-javaoptgen
+endif
+ifeq ($(HAVE_PREPROCESS_FLOW),true)
+  ifeq ($(ACTION),clean)
+android: clean-preprocessed
+  else
+android: run-preprocess
   endif
 endif
-android: CHECK_IMAGE := $(filter %/$(patsubst %image,%.img,$(ACTION)),$(ANDROID_IMAGES))
+android: CHECK_IMAGE := $(ANDROID_TARGET_IMAGES)
 android:
 ifeq ($(ACTION), )
 	$(hide) /usr/bin/perl mediatek/build/tools/mtkBegin.pl $(PROJECT)
@@ -751,7 +786,7 @@ endif
 ifneq ($(DR_MODULE),)
    ifneq ($(ACTION), clean)
 	$(hide) echo building android module MODULE=$(DR_MODULE)
-	$(hide) perl mediatek/build/tools/javaoptgen.pl $(PRJ_MF) $(OPTR_MF)
+#	$(hide) perl mediatek/build/tools/javaoptgen.pl $(PRJ_MF) $(OPTR_MF)
 	$(MAKECMD) $(DR_MODULE)
    else
 	$(hide) echo cleaning android module MODULE=$(DR_MODULE)
@@ -760,9 +795,9 @@ ifneq ($(DR_MODULE),)
 else 
 	$(hide) echo $(SHOWTIME) $(SHOWBUILD)ing $@...
 	$(hide) echo -e \\t\\t\\t\\b\\b\\b\\bLOG: $(S_MODULE_LOG)
-ifeq ($(SHOWBUILD), build)
-	$(hide) perl mediatek/build/tools/javaoptgen.pl $(PRJ_MF) $(OPTR_MF) $(DEAL_STDOUT)
-endif
+#ifeq ($(SHOWBUILD), build)
+#	$(hide) perl mediatek/build/tools/javaoptgen.pl $(PRJ_MF) $(OPTR_MF) $(DEAL_STDOUT)
+#endif
 	$(hide) $(MAKECMD) $(ACTION) $(DEAL_STDOUT) && \
 	  $(call chkImgSize,$(ACTION),$(PROJECT),$(SCATTER_FILE),$(if $(strip $(ACTION)),$(CHECK_IMAGE),$(ANDROID_IMAGES)),$(DEAL_STDOUT),&&) \
 	  $(SHOWRSLT) $${PIPESTATUS[0]} $(MODULE_LOG) $(ACTION) || \
@@ -802,8 +837,16 @@ endef
 #### Show modem info ####
 modem-info:
 ifneq ($(strip $(CUSTOM_MODEM)),)
-	$(hide) cat $(MTK_ROOT_CUSTOM)/common/modem/$(CUSTOM_MODEM)/modem.info
+    ifeq ($(strip $(MTK_ENABLE_MD1)), yes)
+	$(hide) echo ==== Modem info. of MD1 ===
+	$(hide) cat $(foreach f, $(CUSTOM_MODEM), $(wildcard $(MTK_ROOT_CUSTOM)/common/modem/$(f)/modem.info))
 	$(hide) echo ""
+    endif
+    ifeq ($(strip $(MTK_ENABLE_MD2)), yes)
+	$(hide) echo ==== Modem info. of MD2 ===
+	$(hide) cat $(foreach f, $(CUSTOM_MODEM), $(wildcard $(MTK_ROOT_CUSTOM)/common/modem/$(f)/modem_sys2.info))
+	$(hide) echo ""
+    endif
 else
 	$(hide) echo "No modem configured for current project("CUSTOM_MODEM" NOT specified)"
 endif
